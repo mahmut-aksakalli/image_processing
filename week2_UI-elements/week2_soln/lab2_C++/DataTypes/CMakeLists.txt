@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 2.8)
+project( DataTypes )
+find_package( OpenCV REQUIRED )
+add_executable( DataTypes DataTypes.cpp )
+target_link_libraries( DataTypes ${OpenCV_LIBS} )

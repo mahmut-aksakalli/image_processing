@@ -1,0 +1,3 @@
+/home/mafumutto/Desktop/labs/week2/lab2_1/CMakeFiles/edit_cache.dir
+/home/mafumutto/Desktop/labs/week2/lab2_1/CMakeFiles/rebuild_cache.dir
+/home/mafumutto/Desktop/labs/week2/lab2_1/CMakeFiles/cpp.dir

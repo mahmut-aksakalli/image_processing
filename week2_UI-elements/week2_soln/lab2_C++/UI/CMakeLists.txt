@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 2.8)
+project( UI )
+find_package( OpenCV REQUIRED )
+add_executable( UI UI.cpp )
+target_link_libraries( UI ${OpenCV_LIBS} )
