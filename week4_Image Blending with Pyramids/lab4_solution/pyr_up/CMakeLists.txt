@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 2.8)
+project( pyr_up )
+find_package( OpenCV REQUIRED )
+add_executable( pyr_up pyr_up.cpp )
+target_link_libraries( pyr_up ${OpenCV_LIBS} )

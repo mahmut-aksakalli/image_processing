@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 2.8)
+add_definitions(-std=c++11)
+project( Image_blending )
+find_package( OpenCV REQUIRED )
+add_executable( Image_blending Image_blending.cpp )
+target_link_libraries( Image_blending ${OpenCV_LIBS} )

@@ -1,0 +1,3 @@
+/home/mafumutto/Desktop/labs/week4/pyr_up/CMakeFiles/edit_cache.dir
+/home/mafumutto/Desktop/labs/week4/pyr_up/CMakeFiles/rebuild_cache.dir
+/home/mafumutto/Desktop/labs/week4/pyr_up/CMakeFiles/pyr_up.dir
