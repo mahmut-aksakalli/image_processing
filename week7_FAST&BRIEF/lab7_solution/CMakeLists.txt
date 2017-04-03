@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 2.8)
+add_definitions(-std=c++11)
+project( recognition_rate )
+find_package( OpenCV REQUIRED )
+add_executable( recognition_rate recognition_rate.cpp )
+target_link_libraries( recognition_rate ${OpenCV_LIBS} )
