@@ -1,108 +1,162 @@
-#include "opencv2/imgproc/imgproc.hpp"
-#include "opencv2/videoio/videoio.hpp"
-#include "opencv2/highgui/highgui.hpp"
-#include "opencv2/video/background_segm.hpp"
+#include "opencv2/imgcodecs.hpp"
+#include "opencv2/imgproc.hpp"
+#include "opencv2/videoio.hpp"
+#include <opencv2/highgui.hpp>
+#include <opencv2/video.hpp>
+
 #include <iostream>
-#include <stdio.h>
 
-using namespace std;
 using namespace cv;
+using namespace std;
 
-
-int main(int argc, char** argv)
+int main(int argc, char* argv[])
 {
-  VideoCapture cap("../../stream/REYON3_.avi");;
-  Mat frame, bgmask, output,tmp_frame ;
-  Mat total_image  = Mat::zeros(cap.get(4),cap.get(3)-300,CV_32FC1);
+  Mat frame,tmp_frame,frame_last;
+  Mat fgMaskMOG2;
+  Mat falseColorsMap,output;
+
+
+  Point2f vtx[4];
+  Vec4f   lin;
+  double  area;
+  int     idx = 0,counter = 1;
+  double  minVal, maxVal;
+  char name[100];
+  sprintf(name,"%s.jpg",argv[1]);
+  VideoCapture capture(argv[1]);
+  capture.set(cv::CAP_PROP_POS_FRAMES, 1);
+  cout<<"OK"<<endl;
+  Mat total_image  = Mat::zeros(capture.get(4),capture.get(3),CV_32FC1);
   Mat norm_total_image = total_image.clone();
 
-  cv::Rect roi;
-  roi.x = 300;
+  Ptr<BackgroundSubtractor> pMOG2;
+  pMOG2 = createBackgroundSubtractorMOG2();
+
+  Rect roi;
+  roi.x = 0;
   roi.y = 0;
-  roi.width = cap.get(3) - 300;
-  roi.height = cap.get(4);
+  roi.width = capture.get(3) ;
+  roi.height = capture.get(4);
 
+  if(!capture.isOpened())
+      exit(EXIT_FAILURE);
 
-  Ptr<BackgroundSubtractorMOG2> bgsubtractor = createBackgroundSubtractorMOG2();
-  bgsubtractor->setDetectShadows(false);
-  bgsubtractor->setVarThreshold(10);
+  // store initializing time
+  int64 t1 = getTickCount();
 
-  int frame_count = 1;
-  double minVal, maxVal;
+  Mat cls,firstFrame;
+  while(true){
 
-  while(true)
-  {
-      cap >> tmp_frame;
-      if( tmp_frame.empty() )
-          break;
-
-      //GaussianBlur(frame,frame, Size(5,5), 0, 0);
-      frame = tmp_frame(roi);
-      bgsubtractor->apply(frame, bgmask);
-
-      //erode(bgmask, bgmask, Mat(), Point(-1,-1), 2);
-      //dilate(bgmask, bgmask, Mat(), Point(-1,-1), 2);
-
-      for(int i=0 ; i < frame.rows; i++){
-        for(int j=0 ; j < frame.cols; j++){
-          int pixelValue = (int)bgmask.at<uchar>(i,j);
-          total_image.at<float>(i,j) += pixelValue;
-
-        }
+    if(!capture.read(tmp_frame)) {
+      break;
       }
 
-      frame_count++;
+    if(counter>90000)
+      break;
 
-      minMaxLoc(total_image, &minVal, &maxVal); //find minimum and maximum intensities
-      double s_factor = (255.0/(maxVal-minVal));
+    frame = tmp_frame(roi);
+    resize(frame, frame, Size(frame.cols*0.75,frame.rows*0.75), 0, 0, cv::INTER_LINEAR);
+    if(counter ==10)
+      firstFrame = frame.clone();
 
-      for(int i=0 ; i < frame.rows; i++){
-        for(int j=0 ; j < frame.cols; j++){
-          float pixelValueD = (float)total_image.at<float>(i,j);
-          norm_total_image.at<float>(i,j) = (pixelValueD - minVal)*s_factor;
-          if(norm_total_image.at<float>(i,j)<50)
-            norm_total_image.at<float>(i,j) *= 5;
-          else if(norm_total_image.at<float>(i,j)>50 && norm_total_image.at<float>(i,j) <120)
-            norm_total_image.at<float>(i,j) *= 4;
-          else if (norm_total_image.at<float>(i,j)>120 && norm_total_image.at<float>(i,j)<200)
-            norm_total_image.at<float>(i,j) *= 3;
-        }
-      }
+    pMOG2->apply(frame, fgMaskMOG2);
 
-      norm_total_image.convertTo(output, CV_8U);
+    cls = getStructuringElement(MORPH_RECT, Size(5, 5), Point(2, 2));
+    morphologyEx(fgMaskMOG2, fgMaskMOG2, MORPH_CLOSE, cls);
 
-      cv::Mat falseColorsMap,dst;
+    vector<vector<Point> > contours;
+    findContours(fgMaskMOG2, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
-      applyColorMap(output, falseColorsMap, cv::COLORMAP_JET);
-      double alpha = 0.4; double beta; double input;
-      beta = ( 1.0 - alpha );
-      addWeighted( frame, alpha, falseColorsMap, beta, 0.0, dst);
-
-      //namedWindow("video",WINDOW_NORMAL);
-      //namedWindow("Out",WINDOW_NORMAL);
-      //imshow("Out", falseColorsMap);
-      imshow("video",dst);
-
-      if(waitKey(30) >= 27) break;
-    }
-
-    waitKey(0);
-    return 0;
-}
-
-    /*
-    int i = 1;
-    char name[20];
-    while(true)
+    for(size_t i = 0; i < contours.size(); i++)
     {
+        size_t count = contours[i].size();
+        if( count < 6 )
+            continue;
 
-        cap >> frame;
-        if( frame.empty() )
-            break;
-        if((i%3) ==0){
-          sprintf(name,"image%d.jpg",i);
-          imwrite(name,frame);
+        Mat pointsf;
+        Mat(contours[i]).convertTo(pointsf, CV_32F);
+        RotatedRect box = fitEllipse(pointsf);
+        if( (MAX(box.size.width, box.size.height) > MIN(box.size.width, box.size.height)*100)
+            or ( contourArea(contours[i])) < 600)
+            continue;
+
+        box.points(vtx);
+        //circle(frame, box.center, 2, Scalar(0,255,255), 2);
+
+        int x = box.center.x;
+        int y = box.center.y;
+
+        if(x<0 || y<0 || x>frame.cols || y>frame.rows)
+          continue;
+
+        total_image.at<float>(y,x) += 1;
+
+        for(int k=-9;k<9;k++){
+          for(int h=-9;h<9;h++){
+            if((x+k) >0 && (x+k)<frame.cols && (y+h) >0 && (y+h)<frame.rows)
+              if((k*k+h*h)<100)
+                total_image.at<float>(y+h,x+k) += 1;
+          }
         }
-        i++;
+
     }
-    */
+
+      counter++;
+    }
+
+    minMaxLoc(total_image, &minVal, &maxVal); //find minimum and maximum intensities
+    double s_factor = (255.0/(maxVal-minVal));
+    output = frame.clone();
+
+    for(int i=0 ; i < frame.rows; i++){
+      for(int j=0 ; j < frame.cols; j++){
+        float pixelValueD = (float)total_image.at<float>(i,j);
+        norm_total_image.at<float>(i,j) = (pixelValueD - minVal)*s_factor;
+
+        if(norm_total_image.at<float>(i,j)<50)
+          norm_total_image.at<float>(i,j) *= 4.5;
+        else if(norm_total_image.at<float>(i,j)>50 && norm_total_image.at<float>(i,j) <120)
+          norm_total_image.at<float>(i,j) *= 3.5;
+        else if (norm_total_image.at<float>(i,j)>120 && norm_total_image.at<float>(i,j)<200)
+          norm_total_image.at<float>(i,j) *= 2;
+        float newPixel = norm_total_image.at<float>(i,j);
+        if(newPixel<=10)
+          output.at<Vec3b>(i,j) = Vec3b(255, 11,0);
+        else if(newPixel>10 && newPixel<=40)
+          output.at<Vec3b>(i,j) = Vec3b(223, 250,2);
+        else if(newPixel>40 && newPixel<=70)
+          output.at<Vec3b>(i,j) = Vec3b(18, 250,41);
+        else if(newPixel>70 && newPixel<=120)
+          output.at<Vec3b>(i,j) = Vec3b(0, 245,249);
+        else if(newPixel>120 && newPixel<=150)
+          output.at<Vec3b>(i,j) = Vec3b(0, 134,255);
+        else if(newPixel>150 && newPixel<=170)
+          output.at<Vec3b>(i,j) = Vec3b(0, 69,255);
+        else if(newPixel>170 && newPixel<=190)
+          output.at<Vec3b>(i,j) = Vec3b(0, 11,255);
+        else if(newPixel>190 && newPixel<=230)
+          output.at<Vec3b>(i,j) = Vec3b(0, 5,181);
+        else if(newPixel>230)
+          output.at<Vec3b>(i,j) = Vec3b(0, 0,74);
+      }
+    }
+
+    double alpha = 0.55; double beta; double input;
+    beta = ( 1.0 - alpha );
+    addWeighted( firstFrame, alpha, output, beta, 0.0, frame_last);
+
+    int64 t2 = getTickCount();
+    double freq = getTickFrequency();
+    int elapsed = cvRound((t2 - t1) / freq);
+    std::cout <<"elapsed time:\t" << elapsed/60 << " minutes"<<std::endl;
+    resize(frame_last,frame_last,Size(frame.cols/0.75,frame.rows/0.75),0,0,cv::INTER_LINEAR);
+    //imshow("Frame", frame_last);
+    imwrite(name,frame_last);
+
+    //waitKey(0);
+    //delete capture object
+    capture.release();
+    destroyAllWindows();
+
+    return EXIT_SUCCESS;
+}
