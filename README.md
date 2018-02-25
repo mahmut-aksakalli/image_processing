@@ -1,6 +1,3 @@
-# hello-world
+# My openCV learning journey
 
-Hi Aliens,
-
-Wait me for just a moment!
-I will come back..
+It contains my homeworks from CENG391 Introduction to Image Understanding, and projects that I made when I'm an intern at Udentify company
